@@ -1,6 +1,7 @@
 import warnings
 import torch
 from typing import Callable, List, Optional
+# from torch.utils.tensorboard import SummaryWriter
 
 def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
        # gd parameters
@@ -115,7 +116,11 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     """
 
     x = x0.clone()
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose)
+    if "writer" in unused:
+       writer = unused["writer"]
+    else:
+       writer = None
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer=writer)
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     m = torch.zeros_like(x)
@@ -148,12 +153,13 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
 class TerminationCondition(object):
     def __init__(self, f_tol: float, f_rtol: float, x_tol: float, x_rtol: float,
-                 verbose: bool):
+                 verbose: bool, writer = None): #writer for tensorboard just = None for exeption handling
         self.f_tol = f_tol
         self.f_rtol = f_rtol
         self.x_tol = x_tol
         self.x_rtol = x_rtol
         self.verbose = verbose
+        self.writer = writer
 
         self._ever_converge = False
         self._max_i = -1
@@ -176,6 +182,10 @@ class TerminationCondition(object):
         yrcheck = df < self.f_rtol * fabs
         converge = xtcheck or xrcheck or ytcheck or yrcheck
         if self.verbose:
+            if self. writer != None:
+                self.writer.add_scalar('Loss/dx', dxnorm , i)
+                self.writer.add_scalar('Loss/df', df, i)
+                self.writer.add_scalar('Loss/f', f, i)
             if i == 0:
                 print("   #:             f |        dx,        df")
             if converge:
