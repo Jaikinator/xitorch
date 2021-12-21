@@ -180,7 +180,7 @@ class TerminationCondition(object):
         xrcheck = dxnorm < self.x_rtol * xnorm
         ytcheck = df < self.f_tol
         yrcheck = df < self.f_rtol * fabs
-        converge = xtcheck or xrcheck or ytcheck or yrcheck
+        converge = xtcheck or xrcheck or ytcheck or yrcheck or torch.isnan(f) #stops if result get nan
         if self.verbose:
             if self. writer != None:
                 self.writer.add_scalar('Loss/dx', dxnorm , i)
@@ -188,7 +188,9 @@ class TerminationCondition(object):
                 self.writer.add_scalar('Loss/f', f, i)
             if i == 0:
                 print("   #:             f |        dx,        df")
-            if converge:
+            if converge and torch.isnan(f):
+                print("Stopped because function get nan")
+            if converge and not torch.isnan(f):
                 print("Finish with convergence")
             if i == 0 or ((i + 1) % 10) == 0 or converge:
                 print("%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
