@@ -1,6 +1,8 @@
 import warnings
 import torch
 from typing import Callable, List, Optional
+
+
 # from torch.utils.tensorboard import SummaryWriter
 
 def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
@@ -15,6 +17,8 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
        x_rtol: float = 1e-8,
        # misc parameters
        verbose=False,
+       writer = None, # handle erros in TerminationCondition
+       diverge = torch.tensor(float('inf')), # handle erros in TerminationCondition
        **unused):
     r"""
     Vanilla gradient descent with momentum. The stopping conditions use OR criteria.
@@ -44,7 +48,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     """
 
     x = x0.clone()
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose)
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge))
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     for i in range(maxiter):
@@ -65,6 +69,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     x = stop_cond.get_best_x(x)
     return x
 
+
 def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          # gd parameters
          step: float = 1e-3,
@@ -79,6 +84,8 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          x_rtol: float = 1e-8,
          # misc parameters
          verbose=False,
+         writer=None,
+         diverge=torch.tensor(float('inf')),
          **unused):
     r"""
     Adam optimizer by Kingma & Ba (2015). The stopping conditions use OR criteria.
@@ -116,16 +123,14 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     """
 
     x = x0.clone()
-    if "writer" in unused:
-       writer = unused["writer"]
-    else:
-       writer = None
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer=writer)
+
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge))
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     m = torch.zeros_like(x)
     beta1t = beta1
     beta2t = beta2
+
     for i in range(maxiter):
         f, dfdx = fcn(x, *params)
         f = f.detach()
@@ -142,24 +147,55 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
 
         # check the stopping conditions
-        to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
+        if not torch.isinf(diverge):
+            if i == 0:
+                initdiff = abs(abs(diverge) - abs(f))
 
-        if to_stop:
-            break
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff=initdiff)
+
+            if to_stop:
+                # update x values to get nan as output for diverged minimizations
+                dfdx = torch.tensor(float('nan'))
+                dfdx = dfdx.detach()
+
+                # update the step
+                m = beta1 * m + (1 - beta1) * dfdx
+                v = beta2 * v + (1 - beta2) * dfdx ** 2
+                mhat = m / (1 - beta1t)
+                vhat = v / (1 - beta2t)
+                beta1t *= beta1
+                beta2t *= beta2
+                xprev = x.detach()
+                x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
+                break
+
+        else:
+
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
+
+            if to_stop:
+                break
 
         fprev = f
     x = stop_cond.get_best_x(x)
+
     return x
+
 
 class TerminationCondition(object):
     def __init__(self, f_tol: float, f_rtol: float, x_tol: float, x_rtol: float,
-                 verbose: bool, writer = None): #writer for tensorboard just = None for exeption handling
+                 verbose: bool, writer, diverge):
+        # writer for tensorboard just = None for exeption handling
+        # divergence = None if you do not want divergence controll
         self.f_tol = f_tol
         self.f_rtol = f_rtol
         self.x_tol = x_tol
         self.x_rtol = x_rtol
         self.verbose = verbose
         self.writer = writer
+        self.diverge = diverge  # param to check for divergence
+        self.divergence = False  # bool for diverged output
+        self.nan = False
 
         self._ever_converge = False
         self._max_i = -1
@@ -169,7 +205,7 @@ class TerminationCondition(object):
         self._best_x: Optional[torch.Tensor] = None
 
     def to_stop(self, i: int, xnext: torch.Tensor, x: torch.Tensor,
-                f: torch.Tensor, fprev: torch.Tensor) -> bool:
+                f: torch.Tensor, fprev: torch.Tensor, initdiff=torch.tensor(0)) -> bool:
         xnorm: float = float(x.detach().norm().item())
         dxnorm: float = float((x - xnext).detach().norm().item())
         fabs: float = float(f.detach().abs().item())
@@ -180,24 +216,24 @@ class TerminationCondition(object):
         xrcheck = dxnorm < self.x_rtol * xnorm
         ytcheck = df < self.f_tol
         yrcheck = df < self.f_rtol * fabs
-        converge = xtcheck or xrcheck or ytcheck or yrcheck or torch.isnan(f) #stops if result get nan
+        converge = xtcheck or xrcheck or ytcheck or yrcheck  # stops if result get nan
+
         if self.verbose:
-            if self. writer != None:
-                self.writer.add_scalar('Loss/dx', dxnorm , i)
+            if self.writer != None:
+                self.writer.add_scalar('Loss/dx', dxnorm, i)
                 self.writer.add_scalar('Loss/df', df, i)
                 self.writer.add_scalar('Loss/f', f, i)
             if i == 0:
                 print("   #:             f |        dx,        df")
-            if converge and torch.isnan(f):
-                print("Stopped because function get nan")
             if converge and not torch.isnan(f):
                 print("Finish with convergence")
             if i == 0 or ((i + 1) % 10) == 0 or converge:
-                print("%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
+                print(f"%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
 
         res = (i > 0 and converge)
 
         # get the best values
+
         if not self._ever_converge and res:
             self._ever_converge = True
         if i > self._max_i:
@@ -207,11 +243,30 @@ class TerminationCondition(object):
             self._best_x = x
             self._best_dxnorm = dxnorm
             self._best_df = df
+
+        if torch.isnan(f):
+            self.nan = True
+            res = True
+
+        if not torch.isinf(self.diverge) and (i % 5000) == 0:
+            newdiff = abs(self.diverge - abs(f))
+            if newdiff > initdiff:
+                self.divergence = True
+                res = True
+
         return res
 
     def get_best_x(self, x: torch.Tensor) -> torch.Tensor:
         # usually user set maxiter == 0 just to wrap the minimizer backprop
-        if not self._ever_converge and self._max_i > -1:
+        if self.nan:
+            warnings.warn("The minimizer does get nan.")
+            return x
+
+        elif self.divergence == True:
+            warnings.warn("The minimizer divergence.")
+            return x
+
+        elif not self._ever_converge and self._max_i > -1:
             msg = ("The minimizer does not converge after %d iterations. "
                    "Best |dx|=%.4e, |df|=%.4e, f=%.4e" %
                    (self._max_i, self._best_dxnorm, self._best_df, self._best_f))
