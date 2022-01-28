@@ -19,6 +19,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
        verbose=False,
        writer = None, # handle erros in TerminationCondition
        diverge = torch.tensor(float('inf')), # handle erros in TerminationCondition
+       maxdivattamps=50,
        **unused):
     r"""
     Vanilla gradient descent with momentum. The stopping conditions use OR criteria.
@@ -48,7 +49,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     """
 
     x = x0.clone()
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge))
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge), maxdivattamps)
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     for i in range(maxiter):
@@ -86,6 +87,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          verbose=False,
          writer=None,
          diverge=torch.tensor(float('inf')),
+         maxdivattamps = 50,
          **unused):
     r"""
     Adam optimizer by Kingma & Ba (2015). The stopping conditions use OR criteria.
@@ -124,7 +126,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
     x = x0.clone()
 
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge))
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge) ,maxdivattamps )
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     m = torch.zeros_like(x)
@@ -149,11 +151,12 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         # check the stopping conditions
         if not torch.isinf(diverge):
             if i == 0:
-                initdiff = abs(abs(diverge) - abs(f))
+                diverge = torch.tensor(diverge, dtype=torch.float64)
+                initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
 
-            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff=initdiff)
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
 
-            if to_stop:
+            if stop_cond.divergence:
                 # update x values to get nan as output for diverged minimizations
                 dfdx = torch.tensor(float('nan'))
                 dfdx = dfdx.detach()
@@ -167,6 +170,9 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
                 beta2t *= beta2
                 xprev = x.detach()
                 x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
+                break
+
+            elif to_stop:
                 break
 
         else:
@@ -184,7 +190,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
 class TerminationCondition(object):
     def __init__(self, f_tol: float, f_rtol: float, x_tol: float, x_rtol: float,
-                 verbose: bool, writer, diverge):
+                 verbose: bool, writer, diverge ,maxdivattamps : int):
         # writer for tensorboard just = None for exeption handling
         # divergence = None if you do not want divergence controll
         self.f_tol = f_tol
@@ -192,9 +198,14 @@ class TerminationCondition(object):
         self.x_tol = x_tol
         self.x_rtol = x_rtol
         self.verbose = verbose
+
         self.writer = writer
+
         self.diverge = diverge  # param to check for divergence
+        self.divergeattempt = 0 #give adam a second chance
+        self.divfval =torch.zeros(maxdivattamps, dtype= torch.float64) #save divergence values evaluate error
         self.divergence = False  # bool for diverged output
+
         self.nan = False
 
         self._ever_converge = False
@@ -248,11 +259,42 @@ class TerminationCondition(object):
             self.nan = True
             res = True
 
-        if not torch.isinf(self.diverge) and (i % 5000) == 0:
-            newdiff = abs(self.diverge - abs(f))
-            if newdiff > initdiff:
-                self.divergence = True
-                res = True
+        if not torch.isinf(self.diverge):
+
+            if i > 0 and (i % 5000) == 0 and self.divergeattempt == 0:
+
+                newdiff = torch.abs(self.diverge - torch.abs(f))
+
+                self.divfval[0] = newdiff
+                if newdiff > initdiff:
+                    self.divergeattempt += 1
+                    msg = f"Start check of divergence"
+                    warnings.warn(msg)
+
+
+            elif i > 0 and (i % 200) == 0 and 0 < self.divergeattempt < len(self.divfval)-1:
+
+                newdiff = torch.abs(self.diverge - torch.abs(f))
+
+                self.divfval[self.divergeattempt] = newdiff
+
+                if self.divfval[self.divergeattempt] <= self.divfval[self.divergeattempt-1]:
+                    self.divergeattempt = 0
+                else:
+                    self.divergeattempt += 1
+
+
+            elif self.divergeattempt + 1 == len(self.divfval):
+                count = 0
+                for i in range(len(self.divfval)):
+                    if i != 0:
+                        if self.divfval[self.divergeattempt] <= self.divfval[self.divergeattempt-1]:
+                            count += 1
+                if count >= len(self.divfval):
+                    self.divergeattempt = 0
+                else:
+                    self.divergence = True
+
 
         return res
 
