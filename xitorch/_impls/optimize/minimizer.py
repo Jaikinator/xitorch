@@ -123,6 +123,10 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     x_rtol: float or None
         The relative tolerance of the norm of the input ``x``.
     """
+    if type(diverge) is not torch.Tensor:
+
+        #handle if input is not tensor
+        diverge = torch.tensor(diverge, dtype= torch.float64)
 
     x = x0.clone()
 
@@ -151,7 +155,6 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         # check the stopping conditions
         if not torch.isinf(diverge):
             if i == 0:
-                diverge = torch.tensor(diverge, dtype=torch.float64)
                 initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
 
             to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
