@@ -88,6 +88,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          writer=None,
          diverge=torch.tensor(float('inf')),
          maxdivattamps = 50,
+         get_misc = False,
          **unused):
     r"""
     Adam optimizer by Kingma & Ba (2015). The stopping conditions use OR criteria.
@@ -186,9 +187,15 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
                 break
 
         fprev = f
+
     x = stop_cond.get_best_x(x)
 
-    return x
+    if get_misc:
+        f = stop_cond.get_misc(i, x, xprev, f, fprev)
+        return x, f
+    else:
+        return x
+
 
 
 class TerminationCondition(object):
@@ -298,18 +305,17 @@ class TerminationCondition(object):
                 else:
                     self.divergence = True
 
-
         return res
 
     def get_best_x(self, x: torch.Tensor) -> torch.Tensor:
         # usually user set maxiter == 0 just to wrap the minimizer backprop
         if self.nan:
             warnings.warn("The minimizer does get nan.")
-            return x
+            return self._best_x
 
         elif self.divergence == True:
             warnings.warn("The minimizer divergence.")
-            return x
+            return self._best_x
 
         elif not self._ever_converge and self._max_i > -1:
             msg = ("The minimizer does not converge after %d iterations. "
@@ -320,3 +326,29 @@ class TerminationCondition(object):
             return self._best_x
         else:
             return x
+
+
+    def get_misc(self, i: int, xnext: torch.Tensor, x: torch.Tensor,
+                f: torch.Tensor, fprev: torch.Tensor) -> dict:
+        """
+        Returns: more informations about the learning
+        """
+        if self.nan or self.divergence or (not self._ever_converge and self._max_i > -1):
+            out_dic = {"best_x" :  self._best_x,
+                       "best_f": self._best_f,
+                       "best_df": self._best_df,
+                       "best_dcnorm": self._best_dxnorm,
+                       "best_i": self._max_i,
+                       "max_i": i }
+            return out_dic
+
+        else:
+            dxnorm: float = float((x - xnext).detach().norm().item())
+            df: float = float((fprev - f).detach().abs().item())
+            out_dic = {"best_x" : x,
+                       "best_f" : f,
+                       "best_df" : df,
+                       "best_dcnorm" : dxnorm,
+                       "max_i": i,
+                       }
+        return out_dic
