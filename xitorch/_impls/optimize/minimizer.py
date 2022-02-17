@@ -202,7 +202,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
 class TerminationCondition(object):
     def __init__(self, f_tol: float, f_rtol: float, x_tol: float, x_rtol: float,
-                 verbose: bool, writer, diverge ,maxdivattamps : int):
+                 verbose: bool, writer, diverge,maxdivattamps : int):
         # writer for tensorboard just = None for exeption handling
         # divergence = None if you do not want divergence controll
         self.f_tol = f_tol
