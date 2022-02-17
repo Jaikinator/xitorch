@@ -219,6 +219,7 @@ class TerminationCondition(object):
         self.nan = False
 
         self._ever_converge = False
+        self._best_i = -1
         self._max_i = -1
         self._best_dxnorm = float("inf")
         self._best_df = float("inf")
@@ -264,6 +265,7 @@ class TerminationCondition(object):
             self._best_x = x
             self._best_dxnorm = dxnorm
             self._best_df = df
+            self._best_i = i
 
         if torch.isnan(f):
             self.nan = True
@@ -338,7 +340,7 @@ class TerminationCondition(object):
                        "best_f": self._best_f,
                        "best_df": self._best_df,
                        "best_dcnorm": self._best_dxnorm,
-                       "best_i": self._max_i,
+                       "best_i": self._best_i,
                        "max_i": i }
             return out_dic
 
