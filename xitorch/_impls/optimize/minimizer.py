@@ -47,6 +47,9 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     x_rtol: float or None
         The relative tolerance of the norm of the input ``x``.
     """
+    if type(diverge) is not torch.Tensor:
+        #handle if input is not tensor
+        diverge = torch.tensor(diverge, dtype= torch.float64)
 
     x = x0.clone()
     stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge), maxdivattamps)
@@ -125,7 +128,6 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         The relative tolerance of the norm of the input ``x``.
     """
     if type(diverge) is not torch.Tensor:
-
         #handle if input is not tensor
         diverge = torch.tensor(diverge, dtype= torch.float64)
 
