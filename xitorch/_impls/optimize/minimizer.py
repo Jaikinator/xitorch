@@ -67,6 +67,19 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         # check the stopping conditions
         to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
 
+        if not torch.isinf(diverge):
+            if i == 0:
+                initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
+
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
+
+            if stop_cond.divergence:
+                # if leaning divergence
+                break
+
+            elif to_stop:
+                break
+
         if to_stop:
             break
 
@@ -169,19 +182,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
             to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
 
             if stop_cond.divergence:
-                # update x values to get nan as output for diverged minimizations
-                dfdx = torch.tensor(float('nan'))
-                dfdx = dfdx.detach()
-
-                # update the step
-                m = beta1 * m + (1 - beta1) * dfdx
-                v = beta2 * v + (1 - beta2) * dfdx ** 2
-                mhat = m / (1 - beta1t)
-                vhat = v / (1 - beta2t)
-                beta1t *= beta1
-                beta2t *= beta2
-                xprev = x.detach()
-                x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
+                # if leaning divergence
                 break
 
             elif to_stop:
