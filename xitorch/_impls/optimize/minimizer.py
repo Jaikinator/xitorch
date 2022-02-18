@@ -20,6 +20,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
        writer = None, # handle erros in TerminationCondition
        diverge = torch.tensor(float('inf')), # handle erros in TerminationCondition
        maxdivattamps=50,
+       get_misc = False,
        **unused):
     r"""
     Vanilla gradient descent with momentum. The stopping conditions use OR criteria.
@@ -71,7 +72,12 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
         fprev = f
     x = stop_cond.get_best_x(x)
-    return x
+
+    if get_misc:
+        f = stop_cond.get_misc(i, x, xprev, f, fprev)
+        return x, f
+    else:
+        return x
 
 
 def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
