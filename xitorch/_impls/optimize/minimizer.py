@@ -354,12 +354,24 @@ class TerminationCondition(object):
             return out_dic
 
         else:
-            dxnorm: float = float((x - xnext).detach().norm().item())
-            df: float = float((fprev - f).detach().abs().item())
-            out_dic = {"best_x" : x,
-                       "best_f" : f,
-                       "best_df" : df,
-                       "best_dcnorm" : dxnorm,
-                       "max_i": i,
-                       }
+            if f < self._best_f:
+                dxnorm: float = float((x - xnext).detach().norm().item())
+                df: float = float((fprev - f).detach().abs().item())
+                out_dic = {"best_x" : x,
+                           "best_f" : f,
+                           "best_df" : df,
+                           "best_dcnorm" : dxnorm,
+                           "best_i": self._best_i,
+                           "max_i": i,
+                           }
+            else:
+                out_dic = {"best_x": self._best_x,
+                           "best_f": self._best_f,
+                           "best_df": self._best_df,
+                           "best_dcnorm": self._best_dxnorm,
+                           "best_i": self._best_i,
+                           "max_i": i}
+
+                warnings.warn("Finish with convergence but misc will be best results, which wasn't the  converged one.")
+                return out_dic
         return out_dic
