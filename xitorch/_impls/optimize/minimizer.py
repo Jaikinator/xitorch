@@ -372,6 +372,6 @@ class TerminationCondition(object):
                            "best_i": self._best_i,
                            "max_i": i}
 
-                warnings.warn("Finish with convergence but misc will be best results, which wasn't the  converged one.")
+                warnings.warn("Finish with convergence but misc will be best results, which wasn't the converged one.")
                 return out_dic
         return out_dic
