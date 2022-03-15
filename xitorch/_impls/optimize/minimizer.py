@@ -354,7 +354,8 @@ class TerminationCondition(object):
             return out_dic
 
         else:
-            if f < self._best_f:
+
+            if float(f) <= self._best_f:
                 dxnorm: float = float((x - xnext).detach().norm().item())
                 df: float = float((fprev - f).detach().abs().item())
                 out_dic = {"best_x" : x,
