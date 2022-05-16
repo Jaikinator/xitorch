@@ -177,6 +177,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
     beta2t = beta2
 
     for i in range(maxiter):
+
         f, dfdx = fcn(x, *params)
         f = f.detach()
         dfdx = dfdx.detach()
@@ -193,6 +194,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
         # check the stopping conditions
         if i > miniter:
+
             if not torch.isinf(diverge):
                 if i == 0:
                     initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
@@ -213,15 +215,15 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
                 if to_stop:
                     break
 
-            fprev = f
+        fprev = f
 
-        x = stop_cond.get_best_x(x)
+    x = stop_cond.get_best_x(x)
 
-        if get_misc:
-            f = stop_cond.get_misc(i, x, xprev, f, fprev)
-            return x, f
-        else:
-            return x
+    if get_misc:
+        f = stop_cond.get_misc(i, x, xprev, f, fprev)
+        return x, f
+    else:
+        return x
 
 
 
