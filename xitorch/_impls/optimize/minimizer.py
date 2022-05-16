@@ -101,6 +101,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          eps: float = 1e-8,
          # stopping conditions
          maxiter: int = 1000,
+         miniter: int = 1,
          f_tol: float = 0.0,
          f_rtol: float = 0.0,
          x_tol: float = 0.0,
@@ -137,6 +138,9 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         Small number to prevent division by 0.
     maxiter: int
         Maximum number of iterations.
+    miniter: int
+        Minimum number of iterations.
+
     f_tol: float or None
         The absolute tolerance of the output ``f``.
     f_rtol: float or None
@@ -145,9 +149,22 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         The absolute tolerance of the norm of the input ``x``.
     x_rtol: float or None
         The relative tolerance of the norm of the input ``x``.
+    verbose: bool
+        Whether to print the progress.
+
+    writer: torch.utils.tensorboard.SummaryWriter
+        The tensorboard writer.
+    diverge: torch.Tensor or float
+        The divergence value. If the norm of the gradient is larger than this value,
+        the algorithm will stop.
+    maxdivattamps: int
+        The maximum number of times the divergence is checked before the algorithm stops.
+    get_misc: bool
+        Whether to return the misc parameters.
+
     """
     if type(diverge) is not torch.Tensor:
-        #handle if input is not tensor
+        #handle if input is not type torch.Tensor
         diverge = torch.tensor(diverge, dtype= torch.float64)
 
     x = x0.clone()
@@ -175,35 +192,36 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
 
         # check the stopping conditions
-        if not torch.isinf(diverge):
-            if i == 0:
-                initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
+        if i > miniter:
+            if not torch.isinf(diverge):
+                if i == 0:
+                    initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
 
-            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
+                to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
 
-            if stop_cond.divergence:
-                # if leaning divergence
-                break
+                if stop_cond.divergence:
+                    # if leaning divergence
+                    break
 
-            elif to_stop:
-                break
+                elif to_stop:
+                    break
 
+            else:
+
+                to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
+
+                if to_stop:
+                    break
+
+            fprev = f
+
+        x = stop_cond.get_best_x(x)
+
+        if get_misc:
+            f = stop_cond.get_misc(i, x, xprev, f, fprev)
+            return x, f
         else:
-
-            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
-
-            if to_stop:
-                break
-
-        fprev = f
-
-    x = stop_cond.get_best_x(x)
-
-    if get_misc:
-        f = stop_cond.get_misc(i, x, xprev, f, fprev)
-        return x, f
-    else:
-        return x
+            return x
 
 
 
