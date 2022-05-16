@@ -169,7 +169,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
     x = x0.clone()
 
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge) ,maxdivattamps )
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, miniter, writer, abs(diverge) ,maxdivattamps )
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     m = torch.zeros_like(x)
@@ -193,27 +193,26 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         x = (xprev - step * mhat / (vhat ** 0.5 + eps)).detach()
 
         # check the stopping conditions
-        if i > miniter:
 
-            if not torch.isinf(diverge):
-                if i == 0:
-                    initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
+        if not torch.isinf(diverge):
+            if i == 0:
+                initdiff = torch.abs(torch.abs(diverge) - torch.abs(f))
 
-                to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev, initdiff = initdiff)
 
-                if stop_cond.divergence:
-                    # if leaning divergence
-                    break
+            if stop_cond.divergence:
+                # if leaning divergence
+                break
 
-                elif to_stop:
-                    break
+            elif to_stop:
+                break
 
-            else:
+        else:
 
-                to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
+            to_stop = stop_cond.to_stop(i, x, xprev, f, fprev)
 
-                if to_stop:
-                    break
+            if to_stop:
+                break
 
         fprev = f
 
@@ -229,7 +228,7 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
 class TerminationCondition(object):
     def __init__(self, f_tol: float, f_rtol: float, x_tol: float, x_rtol: float,
-                 verbose: bool, writer, diverge : torch.Tensor,maxdivattamps : int):
+                 verbose: bool,miniter, writer, diverge : torch.Tensor,maxdivattamps : int):
         # writer for tensorboard just = None for exeption handling
         # divergence = None if you do not want divergence controll
         self.f_tol = f_tol
@@ -238,6 +237,7 @@ class TerminationCondition(object):
         self.x_rtol = x_rtol
         self.verbose = verbose
 
+        self.miniter = miniter
         self.writer = writer
 
         self.diverge = diverge  # param to check for divergence
@@ -281,7 +281,7 @@ class TerminationCondition(object):
             if i == 0 or ((i + 1) % 10) == 0 or converge:
                 print(f"%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
 
-        res = (i > 0 and converge)
+        res = (i > self.miniter and converge)
 
         # get the best values
 
