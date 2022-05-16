@@ -102,9 +102,9 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
          # stopping conditions
          maxiter: int = 1000,
          f_tol: float = 0.0,
-         f_rtol: float = 1e-8,
+         f_rtol: float = 0.0,
          x_tol: float = 0.0,
-         x_rtol: float = 1e-8,
+         x_rtol: float = 0.0,
          # misc parameters
          verbose=False,
          writer=None,
