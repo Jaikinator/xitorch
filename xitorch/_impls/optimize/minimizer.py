@@ -276,13 +276,14 @@ class TerminationCondition(object):
                 self.writer.add_scalar('Loss/f', f, i)
             if i == 0:
                 print("   #:             f |        dx,        df")
-            if converge and not torch.isnan(f):
+            if converge and not torch.isnan(f) and i > self.miniter:
                 print("Finish with convergence")
+            if i == self.miniter:
+                print("minimal number of iterations is reached now beginning to check for convergence")
             if i == 0 or ((i + 1) % 10) == 0 or converge:
                 print(f"%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
 
         res = (i > self.miniter and converge)
-
         # get the best values
 
         if not self._ever_converge and res:
@@ -302,7 +303,7 @@ class TerminationCondition(object):
 
         if not torch.isinf(self.diverge):
 
-            if i > 0 and (i % 5000) == 0 and self.divergeattempt == 0:
+            if i > self.miniter and (i % 5000) == 0 and self.divergeattempt == 0:
 
                 newdiff = torch.abs(self.diverge - torch.abs(f))
 
@@ -313,7 +314,7 @@ class TerminationCondition(object):
                     warnings.warn(msg)
 
 
-            elif i > 0 and (i % 200) == 0 and 0 < self.divergeattempt < len(self.divfval)-1:
+            elif i > self.miniter and (i % 200) == 0 and 0 < self.divergeattempt < len(self.divfval)-1:
 
                 newdiff = torch.abs(self.diverge - torch.abs(f))
 
