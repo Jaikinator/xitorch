@@ -11,6 +11,7 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
        gamma: float = 0.9,
        # stopping conditions
        maxiter: int = 1000,
+       miniter: int = 1,
        f_tol: float = 0.0,
        f_rtol: float = 1e-8,
        x_tol: float = 0.0,
@@ -53,7 +54,8 @@ def gd(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
         diverge = torch.tensor(diverge, dtype= torch.float64)
 
     x = x0.clone()
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, writer, abs(diverge), maxdivattamps)
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose,
+                                     miniter, writer, abs(diverge) ,maxdivattamps)
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     for i in range(maxiter):
@@ -169,7 +171,8 @@ def adam(fcn: Callable[..., torch.Tensor], x0: torch.Tensor, params: List,
 
     x = x0.clone()
 
-    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose, miniter, writer, abs(diverge) ,maxdivattamps )
+    stop_cond = TerminationCondition(f_tol, f_rtol, x_tol, x_rtol, verbose,
+                                     miniter, writer, abs(diverge) ,maxdivattamps)
     fprev = torch.tensor(0.0, dtype=x0.dtype, device=x0.device)
     v = torch.zeros_like(x)
     m = torch.zeros_like(x)
