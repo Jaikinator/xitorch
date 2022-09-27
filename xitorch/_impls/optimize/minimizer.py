@@ -282,7 +282,7 @@ class TerminationCondition(object):
             if converge and not torch.isnan(f) and i > self.miniter:
                 print("Finish with convergence")
             if i == self.miniter:
-                print("minimal number of iterations is reached now beginning to check for convergence")
+                print("minimal number of iterations is reached now beginning to check for divergence")
             if i == 0 or ((i + 1) % 10) == 0 or converge:
                 print(f"%4d: %.6e | %.3e, %.3e" % (i + 1, f, dxnorm, df))
 
